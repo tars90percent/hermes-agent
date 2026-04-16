@@ -5468,6 +5468,18 @@ class AIAgent:
                     _fire_first_delta()
                     self._fire_reasoning_delta(reasoning_text)
 
+                # Accumulate reasoning_details (MiniMax with reasoning_split=True).
+                # Each delta carries an incremental text chunk.
+                _rd = getattr(delta, "reasoning_details", None)
+                if _rd and not reasoning_text:
+                    for detail in _rd:
+                        if isinstance(detail, dict):
+                            text = detail.get("text", "")
+                            if text:
+                                reasoning_parts.append(text)
+                                _fire_first_delta()
+                                self._fire_reasoning_delta(text)
+
                 # Accumulate text content — fire callback only when no tool calls
                 if delta and delta.content:
                     content_parts.append(delta.content)
@@ -6753,6 +6765,13 @@ class AIAgent:
 
         if self._is_qwen_portal():
             extra_body["vl_high_resolution_images"] = True
+
+        # MiniMax OpenAI-compatible endpoint: request reasoning_split so
+        # thinking content is returned in reasoning_details instead of
+        # being embedded as <think> tags inside delta.content.
+        # https://platform.minimax.io/docs/api-reference/text-chat
+        if "minimax" in self._base_url_lower:
+            extra_body["reasoning_split"] = True
 
         if extra_body:
             api_kwargs["extra_body"] = extra_body
